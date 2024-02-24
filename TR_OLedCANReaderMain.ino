@@ -14,6 +14,16 @@ unsigned char len = 0;
 unsigned char rxBuf[8];
 char msgString[128];                        // Array to store serial string
 
+// Variables to store parsed data
+int angleHigh, angleLow;
+int velocityHigh, velocityLow;
+int torqueHigh, torqueLow;
+int temperatureHigh, temperatureLow;
+// Variables to store complete data
+int angle;
+int velocity;
+int torque;
+int temperature;
 #define CAN0_INT 2                              // Set INT to pin 2
 MCP_CAN CAN0(10);                               // Set CS to pin 10
 
@@ -65,6 +75,31 @@ void loop()
       for(counter = 0; counter < 128; counter++){
         display.print(msgString[counter]);
       } HAVE TO PARSE ARRAY AND CREATE VALUES*/
+      // Parse the msgString array
+      angleHigh = msgString[0];
+      angleLow = msgString[1];
+      velocityHigh = msgString[2];
+      velocityLow = msgString[3];
+      torqueHigh = msgString[4];
+      torqueLow = msgString[5];
+      temperatureHigh = msgString[6];
+      temperatureLow = msgString[7];
+
+      angle = (angleHigh << 8) | angleLow;
+      velocity = (velocityHigh << 8) | velocityLow;
+      torque = (torqueHigh << 8) | torqueLow;
+      temperature = (temperatureHigh << 8) | temperatureLow;
+      display.print("Angle: ");
+      display.println(angle);
+
+      display.print("Velocity: ");
+      display.println(velocity);
+      
+      display.print("Torque: ");
+      display.println(torque);
+      
+      display.print("Temperature: ");
+      display.println(temperature);
     }  
       display.display();
       delay(1000);
