@@ -29,6 +29,16 @@ MCP_CAN CAN0(10);                               // Set CS to pin 10
 
 int counter;
 
+//Enums for different modes
+enum Modes{
+  MODE_SELECTION,
+  PRINT_ALL_MOTORS,
+  PRINT_ONE_MOTOR
+};
+
+Modes currentMode = MODE_SELECTION;
+int selectedMotor = 0;
+
 void setup() {
   Serial.begin(115200);
 
@@ -63,8 +73,16 @@ void loop()
   display.setCursor(0, 0);
 
   if (!digitalRead(CAN0_INT)) {
-    CAN0.readMsgBuf(&rxId, &len, rxBuf); // Read data: len = data length, buf = data byte(s)
-    int motorID = rxId - 0x200;
+  int motorID = rxId - 0x200;
+  displayMotorData(motorID);
+  display.display();
+  delay(10);
+  display.clearDisplay();
+  }
+}
+
+void displayMotorData(int motorID){
+  CAN0.readMsgBuf(&rxId, &len, rxBuf); // Read data: len = data length, buf = data byte(s)
     display.print("Motor #");
     display.println(motorID, DEC);
     display.println("Data:");
@@ -109,7 +127,5 @@ void loop()
     display.print(", Temp: ");
     display.println(temperature, DEC);
   }
-  display.display();
-  delay(10);
-  display.clearDisplay();
-}
+
+
