@@ -15,19 +15,29 @@ unsigned char rxBuf[8];
 char msgString[128];                        // Array to store serial string
 
 // Variables to store parsed data
-int angleHigh, angleLow;
-int velocityHigh, velocityLow;
-int torqueHigh, torqueLow;
-int temperatureHigh, temperatureLow;
+unsigned char angleHigh, angleLow;
+unsigned char velocityHigh, velocityLow;
+unsigned char torqueHigh, torqueLow;
+//unsigned char temperatureHigh, temperatureLow;
 // Variables to store complete data
-int angles;
-int velocity;
-int torque;
-int temperature;
+unsigned int angles;
+signed int velocity;
+signed int torque;
+signed int temperature;
 #define CAN0_INT 2                              // Set INT to pin 2
 MCP_CAN CAN0(10);                               // Set CS to pin 10
 
 int counter;
+
+//Enums for different modes
+enum Modes{
+  MODE_SELECTION,
+  PRINT_ALL_MOTORS,
+  PRINT_ONE_MOTOR
+};
+
+Modes currentMode = MODE_SELECTION;
+int selectedMotor = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -52,9 +62,6 @@ void setup() {
   display.setCursor(0, 0);
   CAN0.setMode(MCP_NORMAL);                     // Set operation mode to normal so the MCP2515 sends acks to received data.
   pinMode(CAN0_INT, INPUT);                            // Configuring pin for /INT input
-  display.print("MCP2515 Library Receive Example...");
-  display.display();
-  delay(2000);
   display.clearDisplay();
 }
 
@@ -66,42 +73,57 @@ void loop()
   display.setCursor(0, 0);
 
   if (!digitalRead(CAN0_INT)) {
-    CAN0.readMsgBuf(&rxId, &len, rxBuf); // Read data: len = data length, buf = data byte(s)
-    int motorID = rxId - 0x200;
-    display.print("Motor #");
-    display.println(motorID, HEX);
-    display.println("Data:");
-    /*DOES NOT WORK
-      for(counter = 0; counter < 128; counter++){
-      display.print(msgString[counter]);
-      } HAVE TO PARSE ARRAY AND CREATE VALUES*/
-    // Parse the msgString array
-    angleHigh = msgString[0];
-    angleLow = msgString[1];
-    velocityHigh = msgString[2];
-    velocityLow = msgString[3];
-    torqueHigh = msgString[4];
-    torqueLow = msgString[5];
-    temperatureHigh = msgString[6];
-    temperatureLow = msgString[7];
-
-    angles = (angleHigh << 8) | angleLow;
-    velocity = (velocityHigh << 8) | velocityLow;
-    torque = (torqueHigh << 8) | torqueLow;
-    temperature = (temperatureHigh << 8) | temperatureLow;
-    display.print("Angle: ");
-    display.println(angles);
-
-    display.print("Velocity: ");
-    display.println(velocity);
-
-    display.print("Torque: ");
-    display.println(torque);
-
-    display.print("Temperature: ");
-    display.println(temperature);
-  }
+  CAN0.readMsgBuf(&rxId, &len, rxBuf); // Read data: len = data length, buf = data byte(s)
+  int motorID = rxId - 0x200;
+  displayMotorData(motorID);
   display.display();
-  delay(1000);
+  delay(10);
   display.clearDisplay();
+  }
 }
+
+void displayMotorData(int motorID){
+    display.print("Motor #");
+    display.println(motorID, DEC);
+    display.println("Data:");
+    
+    /*for(counter = 0; counter < 128; counter++){
+    display.print(rxBuf[counter], HEX);
+    display.print(", ");
+    } */
+    //Serial Print for testing and comparing values
+    sprintf(msgString, "Standard ID: 0x%.3lX       DLC: %1d  Data:", rxId, len);
+  
+    Serial.print(msgString);
+    for(byte i = 0; i<len; i++){
+        sprintf(msgString, " 0x%.2X", rxBuf[i]);
+        Serial.print(msgString);
+    }
+    Serial.println();
+
+    
+    // Parse the rxBuf array
+    angleHigh = rxBuf[0];
+    angleLow = rxBuf[1];
+    velocityHigh = rxBuf[2];
+    velocityLow = rxBuf[3];
+    torqueHigh = rxBuf[4];
+    torqueLow = rxBuf[5];
+    temperature = rxBuf[6];
+
+    angles = ((uint16_t)(angleHigh) << 8) | (uint16_t)(angleLow);
+    velocity = ((uint16_t)(velocityHigh) << 8) | (uint16_t)(velocityLow);
+    torque = ((uint16_t)(torqueHigh) << 8) | (uint16_t)(torqueLow);
+    //temperature = ((uint16_t)(temperatureHigh) << 8) | (uint16_t)(temperatureLow);
+    display.print("A: ");
+    display.print(angles, DEC);
+
+    display.print(", V: ");
+    display.println(velocity, DEC);
+
+    display.print("Tor: ");
+    display.print(torque, DEC);
+
+    display.print(", Temp: ");
+    display.println(temperature, DEC);
+  }
