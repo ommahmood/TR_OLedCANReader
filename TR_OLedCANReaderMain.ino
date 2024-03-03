@@ -4,8 +4,8 @@
 #include <Adafruit_SSD1306.h>
 #include <mcp_can.h>
 
-#define OLED_RESET 4
-#define BUTTON_ONE   4
+#define OLED_RESET 4 //Analog 4
+#define BUTTON_ONE   4 //Digital 4
 #define BUTTON_TWO   5
 #define BUTTON_THREE 6
 #define CAN0_INT 2 // Set INT to pin 2
