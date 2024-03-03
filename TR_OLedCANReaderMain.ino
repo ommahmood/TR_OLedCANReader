@@ -20,7 +20,7 @@ enum Modes{
   PRINT_ONE_MOTOR
 };
 Modes currentMode = MODE_SELECTION;
-
+// Variables to store Motor Data
 long unsigned int rxId;
 unsigned char len = 0;
 unsigned char rxBuf[8];
@@ -29,11 +29,11 @@ char msgString[128];                        // Array to store serial string
 int selectedMotor = 0;
 const int maxNumMotors = 11;
 int motorIDs[maxNumMotors];
-// Variables to store parsed data
+// Variables to store parsed Motor data
 unsigned char angleHigh, angleLow;
 unsigned char velocityHigh, velocityLow;
 unsigned char torqueHigh, torqueLow;
-// Variables to store complete data
+// Variables to store complete Motor data
 unsigned int angles;
 signed int velocity;
 signed int torque;
