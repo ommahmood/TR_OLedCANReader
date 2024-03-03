@@ -5,29 +5,13 @@
 #include <mcp_can.h>
 
 #define OLED_RESET 4
+#define BUTTON_ONE   4
+#define BUTTON_TWO   5
+#define BUTTON_THREE 6
+#define CAN0_INT 2 // Set INT to pin 2
 
+MCP_CAN CAN0(10); // Set CS to pin 10
 Adafruit_SSD1306 display(OLED_RESET);
-//Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
-
-long unsigned int rxId;
-unsigned char len = 0;
-unsigned char rxBuf[8];
-char msgString[128];                        // Array to store serial string
-
-// Variables to store parsed data
-unsigned char angleHigh, angleLow;
-unsigned char velocityHigh, velocityLow;
-unsigned char torqueHigh, torqueLow;
-//unsigned char temperatureHigh, temperatureLow;
-// Variables to store complete data
-unsigned int angles;
-signed int velocity;
-signed int torque;
-signed int temperature;
-#define CAN0_INT 2                              // Set INT to pin 2
-MCP_CAN CAN0(10);                               // Set CS to pin 10
-
-int counter;
 
 //Enums for different modes
 enum Modes{
@@ -35,9 +19,25 @@ enum Modes{
   PRINT_ALL_MOTORS,
   PRINT_ONE_MOTOR
 };
-
 Modes currentMode = MODE_SELECTION;
+
+long unsigned int rxId;
+unsigned char len = 0;
+unsigned char rxBuf[8];
+char msgString[128];                        // Array to store serial string
+// Variables to store Motors
 int selectedMotor = 0;
+const int maxNumMotors = 11;
+int motorIDs[maxNumMotors];
+// Variables to store parsed data
+unsigned char angleHigh, angleLow;
+unsigned char velocityHigh, velocityLow;
+unsigned char torqueHigh, torqueLow;
+// Variables to store complete data
+unsigned int angles;
+signed int velocity;
+signed int torque;
+signed int temperature;
 
 void setup() {
   Serial.begin(115200);
@@ -63,6 +63,18 @@ void setup() {
   CAN0.setMode(MCP_NORMAL);                     // Set operation mode to normal so the MCP2515 sends acks to received data.
   pinMode(CAN0_INT, INPUT);                            // Configuring pin for /INT input
   display.clearDisplay();
+  // Initialize the motorIDs array with known motor IDs
+  motorIDs[0]  = 0x201;
+  motorIDs[1]  = 0x202;
+  motorIDs[2]  = 0x203;
+  motorIDs[3]  = 0x204;
+  motorIDs[4]  = 0x205;
+  motorIDs[5]  = 0x206;
+  motorIDs[6]  = 0x207;
+  motorIDs[7]  = 0x208;
+  motorIDs[8]  = 0x209;
+  motorIDs[9]  = 0x20A;
+  motorIDs[10] = 0x20B;
 }
 
 void loop()
@@ -71,59 +83,103 @@ void loop()
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
+  
+  switch(currentMode){
+    //*******************************************************************
+    case MODE_SELECTION:
+      display.println("Mode Selection");
+      display.println("1. Print All Motors");
+      display.println("2. Print One Motor");
+      display.println("3. Back to Selection");
 
-  if (!digitalRead(CAN0_INT)) {
-  CAN0.readMsgBuf(&rxId, &len, rxBuf); // Read data: len = data length, buf = data byte(s)
-  int motorID = rxId - 0x200;
-  displayMotorData(motorID);
+      if (digitalRead(BUTTON_ONE) == HIGH) {
+        currentMode = PRINT_ALL_MOTORS;
+        delay(500);
+      } else if (digitalRead(BUTTON_TWO) == HIGH) {
+        currentMode = PRINT_ONE_MOTOR;
+        delay(500);
+      }
+      break;
+      //*******************************************************************
+    case PRINT_ALL_MOTORS:
+      // Display data for all motors
+      for (int i = 0; i < maxNumMotors; i++) {
+        selectedMotor = i;
+        displayMotorData(selectedMotor);
+      }
+
+      if (digitalRead(BUTTON_THREE) == HIGH) {
+        currentMode = MODE_SELECTION;
+        delay(500);
+      }
+      break;
+      //*******************************************************************
+    case PRINT_ONE_MOTOR:
+      displayMotorData(selectedMotor);
+
+      if (digitalRead(BUTTON_ONE) == HIGH) {
+        // Switch to the previous motor (wrap around if at the first motor)
+        selectedMotor = (selectedMotor - 1 + maxNumMotors) % maxNumMotors;
+        delay(500);
+      } else if (digitalRead(BUTTON_TWO) == HIGH) {
+        // Switch to the next motor
+        selectedMotor = (selectedMotor + 1) % maxNumMotors;
+        delay(500);
+      } else if (digitalRead(BUTTON_THREE) == HIGH) {
+        currentMode = MODE_SELECTION;
+        delay(500);
+      }
+      break;
+      //*******************************************************************
+  break;
+  }
+  
   display.display();
   delay(10);
   display.clearDisplay();
-  }
 }
 
-void displayMotorData(int motorID){
-    display.print("Motor #");
-    display.println(motorID, DEC);
-    display.println("Data:");
-    
-    /*for(counter = 0; counter < 128; counter++){
-    display.print(rxBuf[counter], HEX);
-    display.print(", ");
-    } */
-    //Serial Print for testing and comparing values
-    sprintf(msgString, "Standard ID: 0x%.3lX       DLC: %1d  Data:", rxId, len);
+void displayMotorData(int motorIndex){
+  //Select Motor
+  int motorID = motorIDs[motorIndex] - 0x200;
   
-    Serial.print(msgString);
-    for(byte i = 0; i<len; i++){
-        sprintf(msgString, " 0x%.2X", rxBuf[i]);
-        Serial.print(msgString);
-    }
-    Serial.println();
+  display.print("Motor #");
+  display.println(motorID, DEC);
+  display.println("Data:");
+  
+  //Serial Print for testing and comparing values
+  sprintf(msgString, "Standard ID: 0x%.3lX       DLC: %1d  Data:", rxId, len);
 
-    
-    // Parse the rxBuf array
-    angleHigh = rxBuf[0];
-    angleLow = rxBuf[1];
-    velocityHigh = rxBuf[2];
-    velocityLow = rxBuf[3];
-    torqueHigh = rxBuf[4];
-    torqueLow = rxBuf[5];
-    temperature = rxBuf[6];
-
-    angles = ((uint16_t)(angleHigh) << 8) | (uint16_t)(angleLow);
-    velocity = ((uint16_t)(velocityHigh) << 8) | (uint16_t)(velocityLow);
-    torque = ((uint16_t)(torqueHigh) << 8) | (uint16_t)(torqueLow);
-    //temperature = ((uint16_t)(temperatureHigh) << 8) | (uint16_t)(temperatureLow);
-    display.print("A: ");
-    display.print(angles, DEC);
-
-    display.print(", V: ");
-    display.println(velocity, DEC);
-
-    display.print("Tor: ");
-    display.print(torque, DEC);
-
-    display.print(", Temp: ");
-    display.println(temperature, DEC);
+  Serial.print(msgString);
+  for(byte i = 0; i < len; i++){
+      sprintf(msgString, " 0x%.2X", rxBuf[i]);
+      Serial.print(msgString);
   }
+  Serial.println();
+
+  
+  // Parse the rxBuf array
+  angleHigh = rxBuf[0];
+  angleLow = rxBuf[1];
+  velocityHigh = rxBuf[2];
+  velocityLow = rxBuf[3];
+  torqueHigh = rxBuf[4];
+  torqueLow = rxBuf[5];
+  temperature = rxBuf[6];
+
+  angles = ((uint16_t)(angleHigh) << 8) | (uint16_t)(angleLow);
+  velocity = ((uint16_t)(velocityHigh) << 8) | (uint16_t)(velocityLow);
+  torque = ((uint16_t)(torqueHigh) << 8) | (uint16_t)(torqueLow);
+ 
+  display.print("A: ");
+  display.print(angles, DEC);
+
+  display.print(", V: ");
+  display.println(velocity, DEC);
+
+  display.print("Tor: ");
+  display.print(torque, DEC);
+
+  display.print(", Temp: ");
+  display.println(temperature, DEC);
+}
