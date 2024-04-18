@@ -19,7 +19,6 @@ Modes currentMode = MODE_SELECTION;
 int motorIndex;
 
 int currentPage = 1;
-int motorIDs[11] = {0};
 int numMotors = 0; // Actual number of motors connected
 unsigned long lastDebounceTime = 0; // Last time buttons' states were checked
 
@@ -27,15 +26,25 @@ long unsigned int rxId;
 unsigned char len = 0;
 unsigned char rxBuf[8];
 char msgString[128];                        // Array to store serial string
-// Variables to store parsed data
+// Struct to store parsed data
 unsigned char angleHigh, angleLow;
 unsigned char velocityHigh, velocityLow;
 unsigned char torqueHigh, torqueLow;
+
 // Variables to store complete data
-unsigned int angles;
-signed int velocity;
-signed int torque;
-signed int temperature;
+struct MotorData {
+  unsigned long id;
+  unsigned int angles;
+  signed int velocity;
+  signed int torque;
+  signed int temperature;
+};
+// Function Declarations
+
+const int MAX_MOTORS = 11; // The maximum number of motors
+
+MotorData motors[MAX_MOTORS]; // Array to hold data for each motor
+int motorIDs[MAX_MOTORS]; // Array to hold the unique IDs for each motor
 
 void setup() {
   Serial.begin(115200);
@@ -55,7 +64,7 @@ void setup() {
     while (1);
   }
   CAN0.setMode(MCP_NORMAL); // Set operation mode to normal so the MCP2515 sends acks to received data.
-  
+  initializeMotorData(); // Initialize the motor data structures
   display.setTextSize(1);
   display.setTextColor(WHITE);
   CAN0.setMode(MCP_NORMAL);                     // Set operation mode to normal so the MCP2515 sends acks to received data.
@@ -83,7 +92,7 @@ void loop() {
             lastDebounceTime = currentMillis; // Update the last debounce time
           } else if (digitalRead(BUTTON_TWO) == HIGH) {
             currentMode = PRINT_ONE_MOTOR; // Enter PRINT_ONE_MOTOR mode
-            currentPage = 1; // Start from the first motor
+            currentPage = 0; // Start from the first motor
             lastDebounceTime = currentMillis; // Update the last debounce time
           }
           displayModeSelection();
@@ -91,9 +100,13 @@ void loop() {
         case PRINT_ALL_MOTORS:
           if (digitalRead(BUTTON_ONE) == HIGH) {
             navigatePages(-1); // Navigate backward
+            Serial.print("Page is now: ");
+            Serial.println(currentPage);
             lastDebounceTime = currentMillis; // Update the last debounce time
           } else if (digitalRead(BUTTON_TWO) == HIGH) {
             navigatePages(1); // Navigate forward
+            Serial.print("Page is now: ");
+            Serial.println(currentPage);
             lastDebounceTime = currentMillis; // Update the last debounce time
           }
           displayAllMotors();
@@ -101,9 +114,13 @@ void loop() {
         case PRINT_ONE_MOTOR:
           if (digitalRead(BUTTON_ONE) == HIGH) {
             navigatePages(-1); // Navigate backward
+            Serial.print("Page is now: ");
+            Serial.println(currentPage);
             lastDebounceTime = currentMillis; // Update the last debounce time
           } else if (digitalRead(BUTTON_TWO) == HIGH) {
             navigatePages(1); // Navigate forward
+            Serial.print("Page is now: ");
+            Serial.println(currentPage);
             lastDebounceTime = currentMillis; // Update the last debounce time
           }
           displayOneMotor();
@@ -115,96 +132,99 @@ void loop() {
 
 
 void displayMotorDataAll(int motorIndex){
-  //Select Motor
-  CAN0.readMsgBuf(motorIDs[motorIndex], &len, rxBuf);
-  int motorID = motorIDs[motorIndex] - 0x200;
+  // Directly display the motor ID, with any necessary adjustments for display purposes.
+  // Subtract 0x200 from id for display.
+  unsigned long displayID1 = motors[motorIndex].id - 0x200;
+  unsigned long displayID2 = motors[motorIndex+1].id - 0x200;
   
-  display.print("M");
-  display.print(motorID, DEC);
-  display.print("|");
-  
-  //Serial Print for testing and comparing values
-  sprintf(msgString, "Standard ID: 0x%.3lX       DLC: %1d  Data:", motorIDs[motorIndex], len);
-  Serial.print(msgString);
-  for(byte i = 0; i < len; i++){
-      sprintf(msgString, " 0x%.2X", rxBuf[i]);
-      Serial.print(msgString);
-  }
+  Serial.print("MOTOR IDs DISPLAYED ARE: ");
+  Serial.println(displayID1);
+  Serial.println(displayID2);
+  display.clearDisplay();
+  display.setCursor(0, 0);
+
   Serial.println();
-  
-  // Parse the rxBuf array
-  angleHigh = rxBuf[0];
-  angleLow = rxBuf[1];
-  velocityHigh = rxBuf[2];
-  velocityLow = rxBuf[3];
-  torqueHigh = rxBuf[4];
-  torqueLow = rxBuf[5];
-  temperature = rxBuf[6];
-  angles = ((uint16_t)(angleHigh) << 8) | (uint16_t)(angleLow);
-  velocity = ((uint16_t)(velocityHigh) << 8) | (uint16_t)(velocityLow);
-  torque = ((uint16_t)(torqueHigh) << 8) | (uint16_t)(torqueLow);
- 
-  display.print("A: ");
-  display.print(angles, DEC);
-  display.print(", V: ");
-  display.println(velocity, DEC);
-  display.print("Tor: ");
-  display.print(torque, DEC);
-  display.print(", Temp: ");
-  display.println(temperature, DEC);
+    //Print first motor
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.print("M");
+    display.print(displayID1); 
+    display.print("|A:");
+    display.print(motors[motorIndex].angles, DEC);
+    display.print(", V:");
+    display.println(motors[motorIndex].velocity, DEC);
+    display.print("Tor: ");
+    display.print(motors[motorIndex].torque, DEC);
+    display.print(", Temp: ");
+    display.println(motors[motorIndex].temperature, DEC);
+    
+    //Print second motor
+    display.print("M");
+    display.print(displayID2); 
+    display.print("|A:");
+    display.print(motors[motorIndex+1].angles, DEC);
+    display.print(", V:");
+    display.println(motors[motorIndex+1].velocity, DEC);
+    display.print("Tor: ");
+    display.print(motors[motorIndex+1].torque, DEC);
+    display.print(", Temp: ");
+    display.println(motors[motorIndex+1].temperature, DEC);
+    display.display();
 }
 
 void displayMotorDataOne(int motorIndex){
-  //Select Motor
-  int motorID = motorIDs[motorIndex] - 0x200;
-  
-  display.print("Motor #");
-  display.println(motorID, DEC);
-  display.println("Data:");
-  
-  //Serial Print for testing and comparing values
-  sprintf(msgString, "Standard ID: 0x%.3lX       DLC: %1d  Data:", rxId, len);
-  Serial.print(msgString);
-  for(byte i = 0; i < len; i++){
-      sprintf(msgString, " 0x%.2X", rxBuf[i]);
-      Serial.print(msgString);
+  if (motorIndex < 0 || motorIndex >= MAX_MOTORS) {
+    Serial.println("Invalid motor index.");
+     Serial.println(motorIndex);
+    return; // Ensure the motorIndex is within a valid range.
   }
-  Serial.println();
-  
-  // Parse the rxBuf array
-  angleHigh = rxBuf[0];
-  angleLow = rxBuf[1];
-  velocityHigh = rxBuf[2];
-  velocityLow = rxBuf[3];
-  torqueHigh = rxBuf[4];
-  torqueLow = rxBuf[5];
-  temperature = rxBuf[6];
-  angles = ((uint16_t)(angleHigh) << 8) | (uint16_t)(angleLow);
-  velocity = ((uint16_t)(velocityHigh) << 8) | (uint16_t)(velocityLow);
-  torque = ((uint16_t)(torqueHigh) << 8) | (uint16_t)(torqueLow);
- 
+
+  // Check if the motor slot is uninitialized using (unsigned long)-1 as the sentinel value.
+  if (motors[motorIndex].id == (unsigned long)-1) {
+    Serial.println("Motor slot is uninitialized.");
+    return; // Skips displaying data for uninitialized slots.
+  }
+
+  // Directly display the motor ID, with any necessary adjustments for display purposes.
+  // Subtract 0x200 from id for display.
+  unsigned long displayID = motors[motorIndex].id - 0x200;
+
+  display.clearDisplay();
+  display.setCursor(0, 0);
+
+  // Display the motor data, starting with the adjusted ID for readability.
+  display.print("Motor#");
+  display.println(displayID); 
   display.print("A: ");
-  display.print(angles, DEC);
+  display.print(motors[motorIndex].angles, DEC); // Display angle
   display.print(", V: ");
-  display.println(velocity, DEC);
+  display.println(motors[motorIndex].velocity, DEC); // Display velocity
   display.print("Tor: ");
-  display.print(torque, DEC);
+  display.print(motors[motorIndex].torque, DEC); // Display torque
   display.print(", Temp: ");
-  display.println(temperature, DEC);
+  display.println(motors[motorIndex].temperature, DEC); // Display temperature
+
+  display.display(); // Refresh the OLED display with the new data
 }
 
-void navigatePages(int direction) {
+
+void navigatePages(int page) {
   if (currentMode == PRINT_ALL_MOTORS) {
     // Logic for navigating pages in PRINT_ALL_MOTORS mode
     int totalPages = (numMotors + 1) / 2; // Assuming 2 motors per page
-    currentPage += direction;
-    if (currentPage < 1) currentPage = totalPages;
-    else if (currentPage > totalPages) currentPage = 1;
+    currentPage += page;
+    if (currentPage < 1) 
+      currentPage = totalPages;
+    else if (currentPage > totalPages) 
+      currentPage = 1;
   } else if (currentMode == PRINT_ONE_MOTOR) {
-    // Logic for navigating motors in PRINT_ONE_MOTOR mode
-    currentPage += direction;
-    if (currentPage < 1) currentPage = numMotors;
-    else if (currentPage > numMotors) currentPage = 1;
+      // Logic for navigating motors in PRINT_ONE_MOTOR mode
+      int totalPages = numMotors + 1;
+      currentPage += page;
+      if (currentPage < 1) 
+        currentPage = totalPages;
+      else if (currentPage > totalPages) 
+        currentPage = 1;
   }
 }
 
@@ -219,46 +239,96 @@ void displayModeSelection() {
 
 void displayAllMotors() {
   // Assuming 2 motors per page for simplicity
-  int startIndex = (currentPage - 1) * 2; // Calculate start index based on currentPage
+  int motorIndex = currentPage - 1; // Calculate start index based on currentPage
   display.clearDisplay();
   display.setCursor(0, 0);
-  for (int i = startIndex; i < startIndex + 2 && i < numMotors; i++) {
-    displayMotorDataAll(i);
+  if(numMotors > 1){
+    displayMotorDataAll(motorIndex);
   }
+  else
+    displayMotorDataAll(motorIndex);
   display.display(); // Refresh the display to show the new page
 }
 
 void displayOneMotor() {
-  motorIndex = currentPage - 1; // Calculate motor index based on currentPage
-  if (motorIndex < numMotors) { // Check to avoid accessing beyond the array
-    display.clearDisplay();
-    display.setCursor(0, 0);
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  motorIndex = currentPage; // Calculate motor index based on currentPage
+  if (motorIndex <= numMotors) { // Check to avoid accessing beyond the array
     displayMotorDataOne(motorIndex);
     display.display(); // Refresh the display to show the selected motor's data
   }
 }
 
 void readCANMessage() {
-  long unsigned int rxId;
-  unsigned char len;
-  unsigned char rxBuf[8];
-  
   if (CAN0.checkReceive() == CAN_MSGAVAIL) {
     CAN0.readMsgBuf(&rxId, &len, rxBuf);
+    parseMotorData(rxBuf, rxId);
     addUniqueMotorID(rxId);
   }
 }
 
-bool addUniqueMotorID(long unsigned int id) {
-  // Simplified logic: directly use the CAN ID as motor ID
-  int motorID = id;
-  
-  for (int i = 0; i < numMotors; i++) {
-    if (motorIDs[i] == motorID) return false; // Already in array
+
+bool addUniqueMotorID(unsigned long id) {
+  // Skip adding if the ID is 0x200
+  if (id == 0x200 || id > 0x215) 
+    return false;
+
+  for (int i = 0; i < MAX_MOTORS; i++) {
+    if (motors[i].id == id) {
+      return false; // ID already present, no need to add
+    }
+    if (motors[i].id == (unsigned long)-1) { // Check for an empty slot
+      motors[i].id = id;
+      return true; // New ID added
+    }
   }
-  if (numMotors < 11) {
-    motorIDs[numMotors++] = motorID; // Add new ID and increment count
-    return true;
+  return false; // No space left to add a new ID
+}
+
+void initializeMotorData() {
+  for (int i = 0; i < MAX_MOTORS; i++) {
+    motors[i].id = (unsigned long)-1; 
+    motors[i].angles = 0;
+    motors[i].velocity = 0;
+    motors[i].torque = 0;
+    motors[i].temperature = 0;
   }
-  return false; // Array full, no new ID added
+}
+
+
+void parseMotorData(unsigned char* info, unsigned long motorID) {
+  // Find the motor index based on motorID
+  int index = -1;
+  for (int i = 0; i < MAX_MOTORS; i++) {
+    if (motors[i].id == motorID) {
+      index = i;
+      break;
+    }
+  }
+  if (index != -1) {
+    // Debug: Print the motorID and index being updated
+    Serial.print("Updating motor at index ");
+    Serial.print(index);
+    Serial.print(" with ID ");
+    Serial.println(motorID, HEX); // Assuming motorID is in HEX format
+
+    // Parse and update motor data
+    motors[index].angles = ((uint16_t)(info[0]) << 8) | (uint16_t)(info[1]);
+    motors[index].velocity = ((uint16_t)(info[2]) << 8) | (uint16_t)(info[3]);
+    motors[index].torque = ((uint16_t)(info[4]) << 8) | (uint16_t)(info[5]);
+    motors[index].temperature = info[6];
+
+    // Debug: Print parsed values
+    Serial.print("Angles: ");
+    Serial.print(motors[index].angles);
+    Serial.print(", Velocity: ");
+    Serial.print(motors[index].velocity);
+    Serial.print(", Torque: ");
+    Serial.print(motors[index].torque);
+    Serial.print(", Temperature: ");
+    Serial.println(motors[index].temperature);
+  } else {
+    Serial.println("Motor ID not found or array full."); // In case index is not found
+  }
 }
